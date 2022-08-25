@@ -6,3 +6,5 @@ Addition of ability to telnet to esp32 and see data sent to/from toshiba a/c uni
 Supports OTA updates from Arduino IDE
 
 This works great for me, but is at your own risk!
+
+*********Added revised version for esp8266, untested on ac unit but connects ok and sends and receives data on serail port ok
