@@ -8,3 +8,5 @@ Supports OTA updates from Arduino IDE
 This works great for me, but is at your own risk!
 
 *********Added revised version for esp8266, untested on ac unit but connects ok and sends and receives data on serail port ok
+
+Revised version of ESP32 to improve mqtt stability issues and fix bug with seiya initial handshake timing
