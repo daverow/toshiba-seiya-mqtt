@@ -4,7 +4,7 @@
 #include <ArduinoOTA.h>
 #include <AsyncMqttClient.h>
 #include <TelnetStream.h>
-  
+
 IPAddress ip(192, 168, 1, 152);
 IPAddress gateway(192, 168, 1, 254);
 IPAddress subnet(255, 255, 255, 0);
@@ -25,9 +25,13 @@ AsyncMqttClient mqttClient;
 int mqtt_status = false;
 String power_state = "OFF";
 int offtimer = 0;
+char payload[100] = {0};
+char topic[50] = {0};
+bool validData = 0;
+
 
 void setup() {
-  Serial.begin(9600,SERIAL_8E1); 
+  Serial.begin(9600, SERIAL_8E1);
   Serial.swap(); //remap tp pins 15(tx) and 13(rx) for connection to ac unit
   Serial1.begin(115200); //debug port on pin2 (tx only)
   Serial.setTimeout(100);
@@ -58,7 +62,8 @@ void loop() {
   ArduinoOTA.handle();
   serialHandler();
   watchdog();
-  //  offmode();
+  offmode();
+  parse();
 }
 
 void offmode() {
@@ -187,30 +192,43 @@ void mqtt_int(String sub1, String val) {
   MQTTSend(subs.c_str(), val.c_str());
 }
 
-int bootlist[65] {
-  2, 255, 255, 0, 0, 0, 0, 2,
-  2, 255, 255, 1, 0, 0, 1, 2, 254,
-  2, 0, 0, 0, 0, 0, 2, 2, 2, 250,
-  2, 0, 1, 129, 1, 0, 2, 0, 0, 123,
-  2, 0, 1, 2, 0, 0, 2, 0, 0, 254,
-  2, 0, 2, 0, 0, 0, 0, 254,
-};
-
-int bootlista[20] {2, 0, 2, 1, 0, 0, 2, 0, 0, 251, 2, 0, 2, 2, 0, 0, 2, 0, 0, 250
-};
-
 void start_handshake() {
-  Serial1.println("starting handshake");
-  for (int i = 0; i < 65; i++) {
-    //   Serial1.print(bootlist[i]);
-    Serial.write(bootlist[i]);
+  int a = 8;
+  int bootlist1[a] = {2, 255, 255, 0, 0, 0, 0, 2};
+  doArray(bootlist1, a);
+  a = 9;
+  int bootlist2[a] = {2, 255, 255, 1, 0, 0, 1, 2, 254};
+  doArray(bootlist2, a);
+  a = 10;
+  int bootlist3[a] = {2, 0, 0, 0, 0, 0, 2, 2, 2, 250};
+  doArray(bootlist3, a);
+  a = 10;
+  int bootlist4[a] = {2, 0, 1, 129, 1, 0, 2, 0, 0, 123};
+  doArray(bootlist4, a);
+  a = 10;
+  int bootlist5[a] = {2, 0, 1, 2, 0, 0, 2, 0, 0, 254};
+  doArray(bootlist5, a);
+  a = 7;
+  int bootlist6[a] = {2, 0, 2, 0, 0, 0, 0, 254};
+  doArray(bootlist6, a);
+  delay(1800);
+  //aftershake
+  a = 10;
+  int bootlist7[a] = {2, 0, 2, 1, 0, 0, 2, 0, 0, 251};
+  doArray(bootlist7, a);
+  a = 10;
+  int bootlist8[a] = {2, 0, 2, 2, 0, 0, 2, 0, 0, 250};
+  doArray(bootlist8, a);
+}
+
+
+void doArray(int array[], int a) {
+  for (int i = 0; i < a; i++) {
+    Serial1.print(array[i]);
+    Serial.write(array[i]);
   }
-  delay(500);
-  for (int i = 0; i < 20; i++) {
-    //    Serial1.print(bootlista[i]);
-    Serial.write(bootlista[i]);
-  }
-  Serial1.println("handshake done");
+  Serial1.println(' ');
+  delay(200);
 }
 
 int modetoint( char *msg) {
@@ -389,57 +407,69 @@ void mqtt_connect() {
   }
 }
 
-void onMqttMessage(char *topic, char *payload1,
+void onMqttMessage(char *topic1, char *payload1,
                    AsyncMqttClientMessageProperties properties, size_t len, size_t index,
                    size_t total) {
-  char payload [255];
-  strncpy(payload, payload1, len);
-  Serial1.println(len);
-  payload[len] = '\0';
-  Serial1.println(payload);
+  Serial.println(topic1);
+  Serial.println(payload1);
+  Serial.println(len);
+  strncpy(topic, topic1, 49);
+  if (len < 99) {
+    strncpy(payload, payload1, len);
+    payload[len] = '\0';
+    validData = 1;
+  }
+}
 
-  if ( strcmp(topic, (hostname + String("/setpoint/set")).c_str()) == 0) {
-    Serial1.print("setpoint ");
-    Serial1.println(payload);
-    setpointVal(payload);
-  }
-  if ( strcmp(topic, (hostname + String("/state/set")).c_str()) == 0) {
-    Serial1.print("state ");
-    Serial1.println(payload);
-    stateControl(payload);
-  }
-  if ( strcmp(topic, (hostname + String("/fanmode/set")).c_str()) == 0) {
-    Serial1.print("fanmode ");
-    Serial1.println(payload);
-    fanControl(payload);
-  }
-  if ( strcmp(topic, (hostname + String("/swingmode/set")).c_str()) == 0) {
-    Serial1.print("swingmode ");
-    Serial1.println(payload);
-    swingControl(payload);
-  }
-  if ( strcmp(topic, (hostname + String("/mode/set")).c_str()) == 0) {
-    Serial1.print("mode ");
-    Serial1.println(payload);
-    modeControl(payload);
-  }
-  if ( strcmp(topic, (hostname + String("/doinit")).c_str()) == 0) {
-    Serial1.print("doinit ");
-    Serial1.println(payload);
-    doinit();
-  }
-  if ( strcmp(topic, (hostname + String("/restart")).c_str()) == 0) {
-    Serial1.print("restart ");
-    Serial1.println(payload);
-    ESP.restart();
-  }
-  if ( strcmp(topic, (hostname + String("/watchdog")).c_str()) == 0) {
-    Serial1.print("watchdog ");
-    Serial1.println(payload);
-  }
-  if ( strcmp(topic, (hostname + String("/timer")).c_str()) == 0) {
-    Serial1.print("timer ");
-    offtimer = millis();
+void parse() {
+  if (validData == 1) {
+    validData = 0;
+    //    Serial.println(topic);
+    //    Serial.println(payload);
+
+    if ( strcmp(topic, (hostname + String("/setpoint/set")).c_str()) == 0) {
+      Serial1.print("setpoint ");
+      Serial1.println(payload);
+      setpointVal(payload);
+    }
+    if ( strcmp(topic, (hostname + String("/state/set")).c_str()) == 0) {
+      Serial1.print("state ");
+      Serial1.println(payload);
+      stateControl(payload);
+    }
+    if ( strcmp(topic, (hostname + String("/fanmode/set")).c_str()) == 0) {
+      Serial1.print("fanmode ");
+      Serial1.println(payload);
+      fanControl(payload);
+    }
+    if ( strcmp(topic, (hostname + String("/swingmode/set")).c_str()) == 0) {
+      Serial1.print("swingmode ");
+      Serial1.println(payload);
+      swingControl(payload);
+    }
+    if ( strcmp(topic, (hostname + String("/mode/set")).c_str()) == 0) {
+      Serial1.print("mode ");
+      Serial1.println(payload);
+      modeControl(payload);
+    }
+    if ( strcmp(topic, (hostname + String("/doinit")).c_str()) == 0) {
+      Serial1.print("doinit ");
+      Serial1.println(payload);
+      doinit();
+    }
+    if ( strcmp(topic, (hostname + String("/restart")).c_str()) == 0) {
+      Serial1.print("restart ");
+      Serial1.println(payload);
+      ESP.restart();
+    }
+    if ( strcmp(topic, (hostname + String("/watchdog")).c_str()) == 0) {
+      Serial1.print("watchdog ");
+      Serial1.println(payload);
+    }
+    if ( strcmp(topic, (hostname + String("/timer")).c_str()) == 0) {
+      Serial1.print("timer ");
+      offtimer = millis();
+    }
   }
 }
 
@@ -470,6 +500,7 @@ void modeControl(char message[]) {
     send_code(function_code, function_value, rcv_code);
   }
 }
+
 
 void fanControl(char message[]) {
   int function_code = 160;
